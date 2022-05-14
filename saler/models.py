@@ -247,3 +247,23 @@ class Orders(models.Model):
 	products = models.CharField(max_length=50)
 	size = models.CharField(max_length=50,default='',null=True)
 	status = models.CharField(max_length=15,choices=STATUS_CHOICES,default='')
+
+class StudentData(models.Model):
+   name=models.CharField(max_length=100)
+   standard=models.CharField(max_length=100)
+   section=models.CharField(max_length=100)
+
+class MainProduct(models.Model):
+   product_id=models.CharField(max_length=100)
+   product_name=models.CharField(max_length=100)
+   cat_id=models.CharField(max_length=100)
+   cat_name=models.CharField(max_length=100)
+   price=models.CharField(max_length=100)
+
+class MainCat(models.Model):
+	cat_id=models.CharField(max_length=100)
+	cat_name=models.CharField(max_length=100)
+
+class Results(models.Model):
+	user_id = models.CharField(max_length=100)
+	cat_name = models.CharField(max_length=100)

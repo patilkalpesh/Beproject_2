@@ -5,11 +5,16 @@ from django.contrib import messages
 from django.contrib.auth.models import User
 from .models import UserDetail, Slider, Contact, Cart
 from django.contrib.auth.decorators import login_required
-from saler.models import Product, ProductSize, dow, category, Orders, trend, ProductReview
+from saler.models import Results,MainProduct, Product, ProductSize, dow, category, Orders, trend, ProductReview
 from django.contrib.auth import update_session_auth_hash
 from django.contrib.auth.forms import PasswordChangeForm
 from django.views.decorators.csrf import csrf_exempt
 from .PayTm import Checksum
+import numpy as np
+import pandas as pd
+import logging
+import sklearn
+from sklearn.decomposition import PCA
 
 def index(request):
 	if request.user.is_superuser:
@@ -23,6 +28,39 @@ def index(request):
 	allProds = []
 	catprods = Product.objects.values('category', 'product_id')
 	cats = {item['category'] for item in catprods}
+	# print(Results.objects.values('user_id')[1]['user_id'])
+	ids = []
+	cats = []
+	for i in range(len(Results.objects.all())):
+		ids.append(Results.objects.values('user_id')[i]['user_id'])
+	for i in range(len(Results.objects.all())):
+		cats.append(Results.objects.values('cat_name')[i]['cat_name'])
+
+	print(cats)
+
+	cust_prod = pd.crosstab(ids, cats)
+	print(cust_prod)
+
+	pca = PCA(n_components=3)
+	pca.fit(cust_prod)
+	pca_samples = pca.transform(cust_prod)
+	ps = pd.DataFrame(pca_samples)
+	tocluster = pd.DataFrame(ps[[2,1]])
+	tocluster = pd.DataFrame(ps[[2,1]])
+	from sklearn.cluster import KMeans
+	from sklearn.metrics import silhouette_score
+
+	clusterer = KMeans(n_clusters=3,random_state=42).fit(tocluster)
+	centers = clusterer.cluster_centers_
+	c_preds = clusterer.predict(tocluster)
+	print (c_preds)
+	clust_prod = cust_prod.copy()
+	clust_prod['cluster'] = c_preds
+	c0 = clust_prod[clust_prod['cluster']==0].drop('cluster',axis=1).mean()
+	c1 = clust_prod[clust_prod['cluster']==1].drop('cluster',axis=1).mean()
+	c2 = clust_prod[clust_prod['cluster']==2].drop('cluster',axis=1).mean()
+	c3 = clust_prod[clust_prod['cluster']==3].drop('cluster',axis=1).mean()
+	print(c0.sort_values(ascending=False)[0:10])
 	for cat in cats:
 		prod = []
 		for p in [i for i in Product.objects.filter(category=cat)]:
@@ -30,6 +68,7 @@ def index(request):
 		n = len(prod)
 		nSlides = 5
 		allProds.append([prod[::-1], range(1, nSlides), nSlides])
+
 	params = {
 		'sliders':Slider.objects.all(),
 		'allProds':allProds,
@@ -40,7 +79,11 @@ def index(request):
 		'dow' : dow.objects.all()[0:30],
 		'trend': trend.objects.order_by('-number')[0:30],
 		'cart_element_no' : len([p for p in Cart.objects.all() if p.user == request.user]),
+		'main_prod': MainProduct.objects.all(),	
 	}
+
+	print(MainProduct.objects.all())
+	
 	return render(request, 'main/index.html', params)
 
 def register(request):
@@ -108,13 +151,14 @@ def productView(request, prod_id):
 		ProductReview(user=request.user,product=prod,review=review).save()
 		return redirect(f"/product/{prod_id}")
 
-	prod = Product.objects.filter(product_id = prod_id).first()
+	prod = MainProduct.objects.filter(product_id = prod_id).first()
+	print(prod)
 	params = {
 		'product':prod,
-		'product_review': ProductReview.objects.filter(product = prod),
-		'sizes':[item for item in ProductSize.objects.filter(product=Product.objects.filter(product_id = prod_id)[0])],
+		#'product_review': ProductReview.objects.filter(product = prod),
+		#'sizes':[item for item in ProductSize.objects.filter(product=Product.objects.filter(product_id = prod_id)[0])],
 		'cart_element_no' : len([p for p in Cart.objects.all() if p.user == request.user]),
-		'category':category.objects.all(),
+		#'category':category.objects.all(),
 	}
 	return render(request, 'main/single.html', params)
 
@@ -227,6 +271,8 @@ def add_to_cart(request):
 				item.save()
 				return HttpResponse(len(cart_prods))
 		Cart(user = request.user, product_id = int(prod_id[0]),product_size=prod_id[1], number = 1).save()
+		userDetail = UserDetail.objects.get(user = request.user)
+		Results(user_id = userDetail.u_id,cat_name = prod_id[0]).save()
 		return HttpResponse(len(cart_prods)+1)
 	else:
 		return HttpResponse("")
