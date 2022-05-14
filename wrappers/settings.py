@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'main',
     'saler',
     'coupon',
+    'import_export'
 ]
 
 MIDDLEWARE = [
